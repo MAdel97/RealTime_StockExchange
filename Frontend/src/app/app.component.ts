@@ -4,18 +4,21 @@ import { FormGroup, FormControl, Validators } from '@angular/forms';
 
 import { GridComponent, GridDataResult, CancelEvent, EditEvent, RemoveEvent, SaveEvent, AddEvent } from '@progress/kendo-angular-grid';
 import { State, process } from '@progress/kendo-data-query';
-import { Client } from './model';
-// import { EditService } from './edit.service';
-import { map } from 'rxjs/operators';
-import { HubConnection, HubConnectionBuilder, LogLevel } from '@microsoft/signalr';
+import { Product } from './Product';
+import { EditService } from './edit.service';
+import { map, tap } from 'rxjs/operators';
+import { SignalRService } from './_services/signalr.service'
+
+// import { AuthService } from '../_services/auth.service';
+// import { TokenStorageService } from '../_services/token-storage.service';
 
 @Component({
     selector: 'my-app',
     template: `
-             
+
         <kendo-grid
+            [kendoGridBinding]="this.data[0]"
             [filterable]="true"
-            [data]="view | async"
             [pageSize]="gridState.take"
             [skip]="gridState.skip"
             [sort]="gridState.sort"
@@ -29,83 +32,83 @@ import { HubConnection, HubConnectionBuilder, LogLevel } from '@microsoft/signal
             (add)="addHandler($event)"
             [navigable]="true"
         >
-         
-            <kendo-grid-column field="id" title="Client Id"></kendo-grid-column>
-            <kendo-grid-column  [filterable]="true" field="v" title=""></kendo-grid-column>
-            <kendo-grid-column  [filterable]="true"field=""  title=""></kendo-grid-column>
-            <kendo-grid-column  [filterable]="true"field="" title=""></kendo-grid-column>
-            <kendo-grid-column  [filterable]="true"  filter="boolean" field=""  title=""></kendo-grid-column>
-            <kendo-grid-column  [filterable]="true" filter= "date"  format= "d" field=""  title=" "></kendo-grid-column>
+            <ng-template kendoGridToolbarTemplate>
+                <button kendoGridAddCommand>Add new Product</button>
+            </ng-template>
+            <kendo-grid-column field="id"  title="Stock Id"></kendo-grid-column>
+            <kendo-grid-column  [filterable]="true" field="ticker Id    " title="Ticker"></kendo-grid-column>
+            <kendo-grid-column  [filterable]="true"field="o"  title="Open price"></kendo-grid-column>
+            <kendo-grid-column  [filterable]="true"field="l" title="Lowest price"></kendo-grid-column>
+            <kendo-grid-column  [filterable]="true"  field="h"  title="Highest price"></kendo-grid-column>
+            <kendo-grid-column  [filterable]="true"  filter="numeric"  field="v"  title="Volume weighted price"></kendo-grid-column>
             <kendo-grid-command-column title="Actions" [width]="220">
-                <ng-template kendoGridCellTemplate let-isNew="isNew">
+                <ng-template kendoGridCellTemplate let-isNew="isNew"> 
                     <button kendoGridEditCommand [primary]="true">Edit</button>
                     <button kendoGridRemoveCommand>Remove</button>
-                    <button kendoGridSaveCommand [disabled]="formGroup?.invalid">{{ isNew ? 'Add' : 'Update' }}</button>
-                    <button kendoGridCancelCommand>{{ isNew ? 'Discard changes' : 'Cancel' }}</button>
+                    <button kendoGridSaveCommand [disabled]="formGroup!.invalid">{{ isNew ? 'Add' : 'Update' }}</button>
+                     <button kendoGridCancelCommand>{{ isNew ? 'Discard changes' : 'Cancel' }}</button>
                 </ng-template>
             </kendo-grid-command-column>
         </kendo-grid>
     `
 })
 export class AppComponent implements OnInit {
-    public view: Observable<GridDataResult> | undefined;
+    public view!: Observable<GridDataResult>;
     public gridState: State = {
         sort: [],
         skip: 0,
         take: 5
     };
-    public formGroup: FormGroup;
-    private hubConnectionBuilder!: HubConnection;
-    stocks  : Client[] = [];
+    public formGroup!: FormGroup;
 
-    private editedRowIndex: number;
+    private editService: EditService;
+    private editedRowIndex!: number;
+    public data: Product[]= [];
 
-    constructor() {
+
+    // isLoggedIn = false;
+    // isLoginFailed = false;
+
+    constructor(@Inject(EditService) editServiceFactory: () => EditService,
+    private readonly signalrService: SignalRService
+    //private authService: AuthService, private tokenStorage: TokenStorageService
+) {   
+    signalrService.itemAdded.subscribe(item => {
+        this.data .push(item)
+      });
+    //   signalrService.itemUpdated.subscribe(item => {
+    //     this.data = this.data.filter(x => x.id !== item.id);
+    //     this.data = [item, ...this.data];
+    //   });
+       // this._signalrService=signalrService;
+       console.log("debug point",this.data);
+   
+        this.editService = editServiceFactory();
     }
-    public ngOnInit(): void {
-        this.hubConnectionBuilder = new HubConnectionBuilder().withUrl('https://localhost:44353/GetStocks').configureLogging(LogLevel.Information).build();
-        this.hubConnectionBuilder.start().then(() => console.log('Connection started.......!')).catch(err => console.log('Error while connect with server'));
-        this.hubConnectionBuilder.on('SendStocksToUser', (result: any) => {
-        this.stocks.push(result);
-          
-        this.view=result;
-        // this.view = this.editService.pipe(map((data) => process(data, this.gridState)));
-     
-        // this.editService.read();
-     })
-     ;
-     console.log(this.stocks);
 
+    public ngOnInit(): void {
+
+        
+        // if (this.tokenStorage.getToken()) {
+        //     this.isLoggedIn = true;
+            //this.roles = this.tokenStorage.getUser().roles;
+        this.view = this.editService.pipe(map((data) => process(data, this.gridState)));
+    
+        this.editService.read();
+        console.log(this.data)
+        //}
     }
 
     public onStateChange(state: State): void {
         this.gridState = state;
-        this.hubConnectionBuilder = new HubConnectionBuilder().withUrl('https://localhost:44353/GetStocks').configureLogging(LogLevel.Information).build();
-        this.hubConnectionBuilder.start().then(() => console.log('Connection started.......!')).catch(err => console.log('Error while connect with server'));
-        this.hubConnectionBuilder.on('SendStocksToUser', (result: any) => {
-            this.stocks.push(result);
-            console.log(this.stocks);
 
-        this.gridState=result
-        this.view=result
-
-        // this.view = this.editService.pipe(map((data) => process(data, this.gridState)));
-     
-        // this.editService.read();
-     });
-     console.log(this.stocks);
-
-        // this.editService.read();
+        this.editService.read();
     }
 
     public addHandler(args: AddEvent): void {
         this.closeEditor(args.sender);
         this.formGroup = new FormGroup({
-            id: new FormControl('', Validators.compose([Validators.required])),
-            v    : new FormControl('',Validators.compose([Validators.required])),
-            vw: new FormControl('',Validators.compose([Validators.required])),
-            h: new FormControl('',),
-            ticker: new FormControl('',),
+          
           
         });
         args.sender.addRow(this.formGroup);
@@ -117,13 +120,7 @@ export class AppComponent implements OnInit {
         this.closeEditor(args.sender);
 
         this.formGroup = new FormGroup({
-            id: new FormControl(dataItem.id),
-            v: new FormControl(dataItem.v, Validators.compose([Validators.required])),
-            vw    : new FormControl(dataItem.vw,Validators.compose([Validators.required])),
-            h: new FormControl(dataItem.h,Validators.compose([Validators.required])),
-            ticker: new FormControl(dataItem.ticker,),
-            0: new FormControl(dataItem.o,),
-
+          
           
         });
 
@@ -136,23 +133,23 @@ export class AppComponent implements OnInit {
     }
 
     public saveHandler({sender, rowIndex, formGroup, isNew}: SaveEvent): void {
-        const product: Client[] = formGroup.value;
+        const product: Product[] = formGroup.value;
 
-        // this.editService.save(product, isNew);
+        this.editService.save(product, isNew);
 
         sender.closeRow(rowIndex);
     }
 
     public removeHandler(args: RemoveEvent): void {
       
-        // this.editService.remove(args.dataItem);
+        this.editService.remove(args.dataItem);
     }
 
     private closeEditor(grid: GridComponent, rowIndex = this.editedRowIndex) {
         // close the editor
         grid.closeRow(rowIndex);
         // reset the helpers
-        this.editedRowIndex = undefined;
-        this.formGroup = undefined;
+        !this.editedRowIndex;
+        !this.formGroup ;
     }
 }

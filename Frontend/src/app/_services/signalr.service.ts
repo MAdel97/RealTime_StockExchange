@@ -27,9 +27,6 @@ export class SignalRService {
       this.itemAdded.next(item);
     });
 
-    // this.connection.on('itemUpdated', item => {
-    //   console.log('itemUpdated');
-    //   this.itemUpdated.next(item);
-    // });
+  
   }
 }
